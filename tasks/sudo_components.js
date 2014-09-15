@@ -9,42 +9,77 @@
 'use strict';
 
 module.exports = function(grunt) {
-
-  // Please see the Grunt documentation for more information regarding task
-  // creation: http://gruntjs.com/creating-tasks
-
   grunt.registerMultiTask('sudo_components', 'Build SUDO specific components', function() {
-    // Merge task-specific and/or target-specific options with these defaults.
     var options = this.options({
-      punctuation: '.',
-      separator: ', '
+      namespace: 'client'
     });
 
-    // Iterate over all specified file groups.
+    var jade;
+    var less;
+
+    // @TODO make sure this is working
+    var less_parse = function (contents) {
+      less = less || new (require('less').Parser)();
+      var done = false;
+      less.parse(contents, function (err, data) {
+        if (err) { done = true; grunt.fail.fatal(err); }
+        contents = data.toCSS({compress: true});
+        done = true;
+      });
+      while (done === false) {
+        console.log('wait for parser');
+      }
+      return contents;
+    };
+
+    var buffer = {};
+
     this.files.forEach(function(f) {
-      // Concat specified files.
-      var src = f.src.filter(function(filepath) {
-        // Warn on and remove invalid source files (if nonull was set).
-        if (!grunt.file.exists(filepath)) {
-          grunt.log.warn('Source file "' + filepath + '" not found.');
-          return false;
-        } else {
-          return true;
+      var file = f.src[0];
+
+      if (grunt.file.isFile(file)) {
+        var root = f.orig.cwd;
+        var component = file.split(root)[1];
+        component = component.split('/');
+        var name = component.pop().split('.')[0];
+        // @FIXME subcomponents are not independent enough in this case (naming)
+        component = component.join('-');
+
+        if (component === "") {
+          grunt.log.warn('parsing component "'+ f.src[0] +'"; component is not wrapped in a component folder, name component "'+name+'".');
+          component = name;
         }
-      }).map(function(filepath) {
-        // Read file source.
-        return grunt.file.read(filepath);
-      }).join(grunt.util.normalizelf(options.separator));
+        var filename = f.orig.dest + component + '.js';
 
-      // Handle options.
-      src += options.punctuation;
+        // @TODO set component container
+        // @TODO modules and options for handler
+        // @TODO modules and options for wrapper
+        var contents = grunt.file.read(file);
 
-      // Write the destination file.
-      grunt.file.write(f.dest, src);
+        switch (file.split('.').pop()) {
+          case 'jade':
+            jade = jade || require('jade');
+            contents = jade.compileClient(contents);
+            contents = options.namespace+".Template('"+ component +"/"+ name +"', '"+ contents +"')";
+            break;
+          case 'less':
+            contents = less_parse(contents);
+            contents = options.namespace+".Style('"+ name +"', '"+ contents +"')";
+            break;
+        }
+        contents = "\n"+'#### '+component+'/'+name+'#####'+"\n"+contents;
 
-      // Print a success message.
-      grunt.log.writeln('File "' + f.dest + '" created.');
+        buffer[filename] = buffer[filename] || '';
+        buffer[filename]+= contents;
+      }
     });
+
+    // @NOTE files and subdirs not sorted
+    // write contents
+    for (var filename in buffer) {
+      grunt.file.write(filename, buffer[filename]);
+      grunt.log.ok('Component "' + filename + '" created.');
+    }
   });
 
 };
