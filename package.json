@@ -1,7 +1,7 @@
 {
   "name": "grunt-sudo-components",
   "description": "Build SUDO specific components",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "homepage": "https://github.com/wirsich/grunt-sudo-components",
   "author": {
     "name": "Stephan Wirsich",
@@ -40,6 +40,7 @@
   ],
   "dependencies": {
     "jade": "^1.6.0",
-    "less": "^1.7.5"
+    "less": "^1.7.5",
+    "uglify-js": "^2.4.15"
   }
 }

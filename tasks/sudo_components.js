@@ -15,6 +15,10 @@ module.exports = function(grunt) {
       namespace:  'client',
       templateFn: 'Template',
       styleFn:    'Style',
+      template:   "/* <%= src %> <%= grunt.template.today('HH:MM:ss') %> */\n",
+      js: {
+        mangle: false
+      },
       jade: {
         options: {
           compileDebug: false,
@@ -114,6 +118,8 @@ module.exports = function(grunt) {
 
         }
 
+        contents = grunt.template.process(options.template, {data: component}) + contents;
+
         grunt.log.ok('Contents compiled ('+ component.src +')');
         appendBuffer(component, buffer, contents);
         done();
@@ -121,6 +127,7 @@ module.exports = function(grunt) {
 
       var errorCallback = function (component, error) {
         grunt.log.warn(component.src);
+        done();
         grunt.fail.fatal(error);
       };
 
@@ -143,11 +150,6 @@ module.exports = function(grunt) {
     var appendBuffer = function (component, buffer, contents) {
       buffer[component.dest] = buffer[component.dest] || '';
       buffer[component.dest]+= contents;
-    };
-
-    var formatContents = function (contents) {
-      // contents = "\n"+' // #### '+ namespace(component) +'#####'+"\n"+contents;
-      // @TODO use grunt.template to format output
     };
 
     // @TODO use progress bar
