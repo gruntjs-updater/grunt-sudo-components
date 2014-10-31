@@ -10,6 +10,7 @@
 
 module.exports = function(grunt) {
   grunt.registerMultiTask('sudo_components', 'Build SUDO specific components', function() {
+
     var options = this.options({
       namespace:  'client',
       templateFn: 'Template',
@@ -28,24 +29,24 @@ module.exports = function(grunt) {
       }
     });
 
-    var jade;
-    var less;
-
-    var lessContents = '';
-    var lessImports = options.less.imports || [];
-
-    // @TODO make sure this is working
-    var less_parse = function (contents) {
-      var imports = lessImports.length > 0 ? "@import '"+ lessImports.join("'; @import '") +"';" : '';
-      contents = imports + contents;
-      less = less || new (require('less').Parser)();
-      var done = false;
-      less.parse(contents, function (err, data) {
-        if (err) { done = true; grunt.fail.fatal(err); }
-        contents = data.toCSS({compress: true});
-        done = true;
-      });
-      return contents;
+    var buffer = {};
+    var jobs = 1;
+    var terminate = this.async();
+    var done = function () {
+      jobs--;
+      grunt.verbose.ok(jobs);
+      if (jobs === 0) {
+        grunt.verbose.ok('finishing');
+        finish();
+        terminate();
+      }
+    };
+    var finish = function () {
+      grunt.log.writeln();
+      grunt.log.ok('Got all components, writing to destination.');
+      grunt.log.writeln();
+      // @NOTE files and subdirs not sorted
+      writeComponents(buffer);
     };
 
     var reduceComponent = function (file, extension) {
@@ -95,55 +96,70 @@ module.exports = function(grunt) {
       return [component.component, component.name].join(':');
     };
 
-    var buffer = {};
+    var handlers = {};
 
+    var handleComponent = function (handlerName, component, buffer) {
+      var successCallback = function (component, contents) {
+        // @TODO substitute with format method
+        // @TODO modulize + options for wrapper
+        switch (component.ext) {
+          case 'less':
+            contents = options.namespace+".Style('"+ namespace(component) +"', '"+ contents +"')";
+            break;
+          case 'jade':
+            contents = options.namespace+".Template('"+ namespace(component) +"', '"+ contents +"')";
+            break;
+          case 'js':
+          default:
+
+        }
+
+        grunt.log.ok('Contents compiled ('+ component.src +')');
+        appendBuffer(component, buffer, contents);
+        done();
+      };
+
+      var errorCallback = function (component, error) {
+        grunt.log.warn(component.src);
+        grunt.fail.fatal(error);
+      };
+
+      try {
+        grunt.verbose.writeln('use '+ handlerName +' to handle contents');
+        handlers[handlerName] =
+          handlers[handlerName] ||
+          require('./handler/'+ handlerName +'.js')
+            .init(options[handlerName] || {});
+
+        jobs++;
+        handlers[handlerName].handle(component, successCallback, errorCallback);
+      } catch (e) {
+        // @TODO throw fatal
+        grunt.log.warn('Cannot handle '+component.src);
+        grunt.log.warn(e);
+      }
+    };
+
+    var appendBuffer = function (component, buffer, contents) {
+      buffer[component.dest] = buffer[component.dest] || '';
+      buffer[component.dest]+= contents;
+    };
+
+    var formatContents = function (contents) {
+      // contents = "\n"+' // #### '+ namespace(component) +'#####'+"\n"+contents;
+      // @TODO use grunt.template to format output
+    };
+
+    // @TODO use progress bar
     grunt.log.subhead('Processing components');
     this.files.forEach(function(f) {
       if (grunt.file.isFile(f.src[0])) {
         var component = reduceComponent(f);
-
-        grunt.log.writeln('Processing '+ component.component + ' ' + component.name +' ('+ component.src +')');
-        grunt.verbose.writeln(component);
-
-        // @TODO set component container
-        // @TODO modulize + options for handler
-        // @TODO modulize + options for wrapper
-        var contents = component.contents();
-        grunt.verbose.ok('Got contents');
-
-        grunt.verbose.writeln('Handle contents');
-        // handle content types
-        switch (component.ext) {
-          case 'jade':
-            grunt.verbose.writeln('use jade to handle contents');
-            jade = jade || require('jade');
-            var jadeOptions = options.jade.options;
-            jadeOptions.filename = component.src;
-            contents = jade.compileClient(contents, jadeOptions);
-            contents = options.namespace+".Template('"+ namespace(component) +"', '"+ contents +"')";
-            grunt.verbose.ok('processed contents with jade');
-            break;
-          case 'less':
-            grunt.verbose.writeln('use less to handle contents');
-            contents = less_parse(contents);
-            contents = options.namespace+".Style('"+ namespace(component) +"', '"+ contents +"')";
-            grunt.verbose.ok('processed contents with less');
-            break;
-        }
-        contents = "\n"+'#### '+ namespace(component) +'#####'+"\n"+contents;
-
-        buffer[component.dest] = buffer[component.dest] || '';
-        buffer[component.dest]+= contents;
+        // grunt.log.writeln('Processing '+ component.component + ' ' + component.name +' ('+ component.src +')');
+        grunt.verbose.writeln(component.src, component.component, component.name, component.dest);
+        handleComponent(component.ext, component, buffer);
       }
     });
-
-    // @TODO use grunt templates to format output
-
-    grunt.log.writeln();
-    grunt.log.ok('Got all components, writing to destination.');
-    grunt.log.writeln();
-
-    // @NOTE files and subdirs not sorted
-    writeComponents(buffer);
+    done();
   });
 };
