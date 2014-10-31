@@ -85,6 +85,8 @@ module.exports = function(grunt) {
     };
 
     var buffer = {};
+
+    grunt.log.subhead('Processing components');
     this.files.forEach(function(f) {
       if (grunt.file.isFile(f.src[0])) {
         var component = reduceComponent(f);
@@ -106,15 +108,15 @@ module.exports = function(grunt) {
             jade = jade || require('jade');
             var jadeOptions = options.jade;
             jadeOptions.filename = component.src;
-            contents = jade.compileClient(contents, {filename: jadeOptions});
+            contents = jade.compileClient(contents, jadeOptions);
             contents = options.namespace+".Template('"+ namespace(component) +"', '"+ contents +"')";
-            grunt.log.ok('processed contents with jade');
+            grunt.verbose.ok('processed contents with jade');
             break;
           case 'less':
             grunt.verbose.writeln('use less to handle contents');
             // contents = less_parse(contents);
             contents = options.namespace+".Style('"+ namespace(component) +"', '"+ contents +"')";
-            grunt.log.ok('processed contents with less');
+            grunt.verbose.ok('processed contents with less');
             break;
         }
         contents = "\n"+'#### '+ namespace(component) +'#####'+"\n"+contents;
