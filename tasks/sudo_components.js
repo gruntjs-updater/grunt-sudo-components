@@ -11,12 +11,17 @@
 module.exports = function(grunt) {
   grunt.registerMultiTask('sudo_components', 'Build SUDO specific components', function() {
     var options = this.options({
-      namespace: 'client'
+      namespace:  'client',
+      templateFn: 'Template',
+      styleFn:    'Style',
+      jade: {
+        compileDebug: false,
+        pretty: false
+      }
     });
 
     var jade;
     var less;
-
     // @TODO make sure this is working
     var less_parse = function (contents) {
       less = less || new (require('less').Parser)();
@@ -32,54 +37,100 @@ module.exports = function(grunt) {
       return contents;
     };
 
-    var buffer = {};
+    var reduceComponent = function (file, extension) {
+      extension = (extension || '.js').toLowerCase();
+      var src = file.src[0];
+      var cwd = file.orig.cwd;
+      var ext = src.split('.').pop();
+      var dest = file.orig.dest;
 
-    this.files.forEach(function(f) {
-      var file = f.src[0];
+      var component;
+      var name;
+      var comp = src.split(cwd)[1];
 
-      if (grunt.file.isFile(file)) {
-        var root = f.orig.cwd;
-        var component = file.split(root)[1];
-        component = component.split('/');
-        var name = component.pop().split('.')[0];
-        // @FIXME subcomponents are not independent enough in this case (naming)
-        component = component.join('-');
+      if (comp.indexOf('/') < 0) {
+        // is in root directory cwd
+        component = comp.split('.'+ ext)[0];
+        name = component;
+      }
+      else {
+        component = comp.split('/')[0];
+        name = comp.split('/').pop();
+      }
+      name = name.split('.'+ ext)[0];
 
-        if (component === "") {
-          grunt.log.warn('parsing component "'+ f.src[0] +'"; component is not wrapped in a component folder, name component "'+name+'".');
-          component = name;
+      return {
+        debug: comp,
+        cwd: cwd,
+        src: src,
+        dest: dest + component.toLowerCase() + extension,
+        component: component.toLowerCase(),
+        name: name.toLowerCase(),
+        ext: ext.toLowerCase(), // if file
+        contents: function () {
+          return grunt.file.read(src);
         }
-        var filename = f.orig.dest + component + '.js';
+      };
+    };
+
+    var writeComponents = function (buffer) {
+      for (var filename in buffer) {
+        grunt.file.write(filename, buffer[filename]);
+        grunt.log.ok(filename + '" created.');
+      }
+    };
+
+    var namespace = function (component) {
+      return [component.component, component.name].join(':');
+    };
+
+    var buffer = {};
+    this.files.forEach(function(f) {
+      if (grunt.file.isFile(f.src[0])) {
+        var component = reduceComponent(f);
+
+        grunt.log.writeln('Processing '+ component.component + ' ' + component.name +' ('+ component.src +')');
+        grunt.verbose.writeln(component);
 
         // @TODO set component container
-        // @TODO modules and options for handler
-        // @TODO modules and options for wrapper
-        var contents = grunt.file.read(file);
+        // @TODO modulize + options for handler
+        // @TODO modulize + options for wrapper
+        var contents = component.contents();
+        grunt.verbose.ok('Got contents');
 
-        switch (file.split('.').pop()) {
+        grunt.verbose.writeln('Handle contents');
+        // handle content types
+        switch (component.ext) {
           case 'jade':
+            grunt.verbose.writeln('use jade to handle contents');
             jade = jade || require('jade');
-            contents = jade.compileClient(contents);
-            contents = options.namespace+".Template('"+ component +"/"+ name +"', '"+ contents +"')";
+            var jadeOptions = options.jade;
+            jadeOptions.filename = component.src;
+            contents = jade.compileClient(contents, {filename: jadeOptions});
+            contents = options.namespace+".Template('"+ namespace(component) +"', '"+ contents +"')";
+            grunt.log.ok('processed contents with jade');
             break;
           case 'less':
-            contents = less_parse(contents);
-            contents = options.namespace+".Style('"+ name +"', '"+ contents +"')";
+            grunt.verbose.writeln('use less to handle contents');
+            // contents = less_parse(contents);
+            contents = options.namespace+".Style('"+ namespace(component) +"', '"+ contents +"')";
+            grunt.log.ok('processed contents with less');
             break;
         }
-        contents = "\n"+'#### '+component+'/'+name+'#####'+"\n"+contents;
+        contents = "\n"+'#### '+ namespace(component) +'#####'+"\n"+contents;
 
-        buffer[filename] = buffer[filename] || '';
-        buffer[filename]+= contents;
+        buffer[component.dest] = buffer[component.dest] || '';
+        buffer[component.dest]+= contents;
       }
     });
 
-    // @NOTE files and subdirs not sorted
-    // write contents
-    for (var filename in buffer) {
-      grunt.file.write(filename, buffer[filename]);
-      grunt.log.ok('Component "' + filename + '" created.');
-    }
-  });
+    // @TODO use grunt templates to format output
 
+    grunt.log.writeln();
+    grunt.log.ok('Got all components, writing to destination.');
+    grunt.log.writeln();
+
+    // @NOTE files and subdirs not sorted
+    writeComponents(buffer);
+  });
 };
