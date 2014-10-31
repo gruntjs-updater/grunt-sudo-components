@@ -15,15 +15,29 @@ module.exports = function(grunt) {
       templateFn: 'Template',
       styleFn:    'Style',
       jade: {
-        compileDebug: false,
-        pretty: false
+        options: {
+          compileDebug: false,
+          pretty: false
+        }
+      },
+      less: {
+        imports: [],
+        options: {
+          minify: true
+        }
       }
     });
 
     var jade;
     var less;
+
+    var lessContents = '';
+    var lessImports = options.less.imports || [];
+
     // @TODO make sure this is working
     var less_parse = function (contents) {
+      var imports = lessImports.length > 0 ? "@import '"+ lessImports.join("'; @import '") +"';" : '';
+      contents = imports + contents;
       less = less || new (require('less').Parser)();
       var done = false;
       less.parse(contents, function (err, data) {
@@ -31,9 +45,6 @@ module.exports = function(grunt) {
         contents = data.toCSS({compress: true});
         done = true;
       });
-      while (done === false) {
-        console.log('wait for parser');
-      }
       return contents;
     };
 
@@ -106,7 +117,7 @@ module.exports = function(grunt) {
           case 'jade':
             grunt.verbose.writeln('use jade to handle contents');
             jade = jade || require('jade');
-            var jadeOptions = options.jade;
+            var jadeOptions = options.jade.options;
             jadeOptions.filename = component.src;
             contents = jade.compileClient(contents, jadeOptions);
             contents = options.namespace+".Template('"+ namespace(component) +"', '"+ contents +"')";
@@ -114,7 +125,7 @@ module.exports = function(grunt) {
             break;
           case 'less':
             grunt.verbose.writeln('use less to handle contents');
-            // contents = less_parse(contents);
+            contents = less_parse(contents);
             contents = options.namespace+".Style('"+ namespace(component) +"', '"+ contents +"')";
             grunt.verbose.ok('processed contents with less');
             break;
