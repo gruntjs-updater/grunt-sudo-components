@@ -111,7 +111,7 @@ module.exports = function(grunt) {
             contents = options.namespace+".Style('"+ namespace(component) +"', '"+ contents +"')";
             break;
           case 'jade':
-            contents = options.namespace+".Template('"+ namespace(component) +"', '"+ contents +"')";
+            contents = options.namespace+".Template('"+ namespace(component) +"', "+ contents +")";
             break;
           case 'js':
           default:
