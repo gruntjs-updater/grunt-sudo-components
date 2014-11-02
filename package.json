@@ -1,7 +1,7 @@
 {
   "name": "grunt-sudo-components",
   "description": "Build SUDO specific components",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "homepage": "https://github.com/wirsich/grunt-sudo-components",
   "author": {
     "name": "Stephan Wirsich",

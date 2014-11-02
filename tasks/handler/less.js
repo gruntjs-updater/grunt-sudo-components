@@ -12,7 +12,7 @@ module.exports = {
   init: function (options) {
     this.options = options;
     this.parser = this.parser || new (require('less').Parser)();
-    this.imports = options.imports.length > 0 ?
+    this.imports = options.imports && options.imports.length > 0 ?
       "@import '"+ options.imports.join("'; @import '") +"';"
       : '';
     return this;
