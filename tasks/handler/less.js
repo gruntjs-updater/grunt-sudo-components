@@ -11,19 +11,21 @@
 module.exports = {
   init: function (options) {
     this.options = options;
-    this.parser = this.parser || new (require('less').Parser)();
+    this.less = this.less || require('less');
     this.imports = options.imports && options.imports.length > 0 ?
-      "@import '"+ options.imports.join("'; @import '") +"';"
+      '@import (reference) "'+ options.imports.join('"; @import (reference) "') +'";'
       : '';
     return this;
   },
 
   handle: function (component, success, error) {
-    this.parser.parse(this.imports +"\n"+ component.contents(), function (err, data) {
+    this.less.render(this.imports +"\n"+ component.contents(), {
+      compress: true,
+    }, function (err, css) {
       if (err) {
         return error(component, err);
       }
-      success(component, data.toCSS({compress: true}));
+      success(component, css);
     });
   }
 };
