@@ -8,6 +8,8 @@
 
 'use strict';
 
+//@TODO use scripts option when render jade to ensure that no extra import is done
+
 module.exports = function(grunt) {
   grunt.registerMultiTask('sudo_components', 'Build SUDO specific components', function() {
 
@@ -91,37 +93,61 @@ module.exports = function(grunt) {
 
     var writeComponents = function (buffer) {
       for (var filename in buffer) {
+        buffer[filename] = [
+          buffer[filename].top.join(''),
+          buffer[filename].middle.join(''),
+          buffer[filename].bottom.join('')
+        ].join('');
+
         grunt.file.write(filename, buffer[filename]);
         grunt.log.ok(filename + '" created.');
       }
     };
 
     var namespace = function (component) {
-      return [component.component, component.name].join(':');
+      return [component.component, component.name].join('/');
     };
 
     var handlers = {};
+
+    var patterns = {
+      "middle": /^(\s)?[a-z]+\.View(\s)?\(/i,
+      "bottom": /^(\s)?[a-z]+\.ViewController(\s)?\(/i,
+      "foo": /^(\s)?[a-z]+\.Controller(\s)?\(/i,
+    };
+    var dispatchOrder = function (content) {
+      var order = 'bottom';
+      for (order in patterns) {
+        if (content.match(patterns[order])) {
+          return order;
+        }
+      }
+      return order;
+    };
 
     var handleComponent = function (handlerName, component, buffer) {
       var successCallback = function (component, contents) {
         // @TODO substitute with format method
         // @TODO modulize + options for wrapper
+        var order = 'middle';
         switch (component.ext) {
           case 'less':
             contents = options.namespace+".Style('"+ namespace(component) +"', '"+ contents +"')";
+            order = 'bottom';
             break;
           case 'jade':
             contents = options.namespace+".Template('"+ namespace(component) +"', "+ contents +")";
+            order = 'top';
             break;
           case 'js':
-          default:
-
+            order = dispatchOrder(contents);
+            break;
         }
 
-        contents = grunt.template.process(options.template, {data: component}) + contents;
+        contents = "\n  // "+ order + grunt.template.process(options.template, {data: component}) + "\n" + contents;
 
         grunt.log.ok('Contents compiled ('+ component.src +')');
-        appendBuffer(component, buffer, contents);
+        appendBuffer(component, buffer, order, contents);
         done();
       };
 
@@ -147,9 +173,18 @@ module.exports = function(grunt) {
       }
     };
 
-    var appendBuffer = function (component, buffer, contents) {
-      buffer[component.dest] = buffer[component.dest] || '';
-      buffer[component.dest]+= contents;
+    var appendBuffer = function (component, buffer, order, contents) {
+      buffer[component.dest] = buffer[component.dest] || {top: [], middle: [], bottom: []};
+
+      switch (order) {
+        case 'top':
+        case 'bottom':
+        case 'middle':
+          buffer[component.dest][order].push(contents);
+          break;
+        default:
+          buffer[component.dest]['bottom'].push(contents);
+      }
     };
 
     // @TODO use progress bar
